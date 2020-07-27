@@ -48,8 +48,6 @@ def showarray(a, fmt='jpeg'):
 Load visual gnome labels
 """
 
-data_path = 'data/genome/1600-400-20'
-
 # Load VG Classes
 data_path = 'data/genome/1600-400-20'
 
