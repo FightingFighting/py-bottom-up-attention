@@ -243,10 +243,10 @@ def apply_augs(im, boxes):
     
     album_augs = [
         HorizontalFlip(p=0.5),
-        RandomBrightness(limit=0.3, p=0.5),
-        RandomContrast(limit=0.3, p=0.5),
-        RandomScale(scale_limit=(-0.4, 0.0), p=0.3),
-        MedianBlur(blur_limit=5, p=0.3),
+        # RandomBrightness(limit=0.3, p=0.5),
+        # RandomContrast(limit=0.3, p=0.5),
+        RandomScale(scale_limit=(-0.3, 0.0), p=0.3),
+        # MedianBlur(blur_limit=5, p=0.3),
         # Rotate(limit=10, p=0.25),
     ]
     album_augs = Compose(album_augs, bbox_params=bbox_params)

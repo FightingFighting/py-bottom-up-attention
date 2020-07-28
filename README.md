@@ -10,6 +10,8 @@ The features extracted from this repo is compatible with LXMERT code and pre-tra
 
 ## Installation
 ```
+conda install -c psi4 gcc-5
+
 git clone https://github.com/airsplay/py-bottom-up-attention.git
 cd py-bottom-up-attention
 

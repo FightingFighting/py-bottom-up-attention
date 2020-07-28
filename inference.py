@@ -174,6 +174,7 @@ def extract_boxes_feature(predictor, raw_image, raw_boxes):
     images = predictor.model.preprocess_image(inputs)
     
     # Run Backbone Res1-Res4
+    # import pdb; pdb.set_trace()
     features = predictor.model.backbone(images.tensor)
     
     # Run RoI head for each proposal (RoI Pooling + Res5)
@@ -186,6 +187,46 @@ def extract_boxes_feature(predictor, raw_image, raw_boxes):
     return feature_pooled
 
 
+def extract_batch_boxes_feature(predictor, raw_images, raw_boxes_list):
+    assert len(raw_images) == len(raw_boxes_list)
+    
+    # Preprocessing
+    inputs = []
+    for raw_image in raw_images:
+        image = predictor.transform_gen.get_transform(raw_image).apply_image(raw_image)
+        image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
+        inputs.append({"image": image, "height": raw_image.shape[0], "width": raw_image.shape[1]})
+    images = predictor.model.preprocess_image(inputs)
+    
+    # Process Boxes
+    proposal_boxes = []
+    for raw_iamge, raw_boxes in zip(raw_images, raw_boxes_list):
+        raw_height, raw_width = raw_image.shape[:2]
+        raw_boxes = Boxes(torch.from_numpy(raw_boxes).cuda())
+        # Scale the box
+        new_height, new_width = image.shape[:2]
+        scale_x = 1. * new_width / raw_width
+        scale_y = 1. * new_height / raw_height
+        #print(scale_x, scale_y)
+        boxes = raw_boxes.clone()
+        boxes.scale(scale_x=scale_x, scale_y=scale_y)
+        proposal_boxes.append(boxes)
+    
+    # ----
+    # Run Backbone Res1-Res4
+    features = predictor.model.backbone(images.tensor)
+    
+    # Run RoI head for each proposal (RoI Pooling + Res5)
+    features = [features[f] for f in predictor.model.roi_heads.in_features]
+    box_features = predictor.model.roi_heads._shared_roi_transform(
+        features, proposal_boxes
+    )
+    feature_pooled = box_features.mean(dim=[2, 3])  # pooled to 1x
+    # (sum_proposals, 2048) --> [(p1, 2048), (p2, 2048), ..., (pn, 2048)]
+    features_list = feature_pooled.split([len(bb) for bb in raw_boxes_list])
+    return features_list
+
+
 if __name__ == "__main__":
     p = build_predictor()
     img = np.zeros([512, 512, 3], dtype=np.uint8)
@@ -195,5 +236,28 @@ if __name__ == "__main__":
     ])
     doit_without_boxes(p, img)
     f = extract_boxes_feature(p, img, boxes)
+
+    imgs = [
+        np.zeros([512, 512, 3], dtype=np.uint8),
+        np.zeros([384, 384, 3], dtype=np.uint8),
+        np.zeros([640, 640, 3], dtype=np.uint8),
+    ]
+    boxes_list = [
+        np.array([
+            [0, 0, 100, 199],
+            [0, 50, 100, 199],
+        ]),
+        np.array([
+            [0, 0, 100, 199],
+            [0, 50, 100, 199],
+            [20, 50, 120, 199],
+            [20, 30, 120, 199],
+        ]),
+        np.array([
+            [0, 0, 100, 199],
+            [0, 50, 100, 199],
+        ]),
+    ]
+    fs = extract_batch_boxes_feature(p, imgs, boxes_list)
     import pdb; pdb.set_trace()
     print(f)
