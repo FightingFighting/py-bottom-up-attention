@@ -227,8 +227,61 @@ def extract_batch_boxes_feature(predictor, raw_images, raw_boxes_list):
     return features_list
 
 
+def apply_augs(im, boxes):
+    data_dict = {
+        'image': im,
+        'bboxes': [
+            [box['xmin'], box['ymin'], box['xmax'], box['ymax']]
+            for box in boxes
+        ],
+        'fake_label': [0] * len(boxes)
+    }
+    # print(data_dict['bboxes'])
+    
+    bbox_params = BboxParams(
+        format='albumentations',
+        min_area=0, 
+        min_visibility=0.2,
+        label_fields=['fake_label'])
+    
+    album_augs = [
+        HorizontalFlip(p=0.5),
+        # RandomBrightness(limit=0.3, p=0.5),
+        # RandomContrast(limit=0.3, p=0.5),
+        RandomScale(scale_limit=(-0.3, 0.0), p=0.3),
+        # MedianBlur(blur_limit=5, p=0.3),
+        # Rotate(limit=10, p=0.25),
+    ]
+    album_augs = Compose(album_augs, bbox_params=bbox_params)
+    
+    new_data_dict = album_augs(**data_dict)
+    # print(new_data_dict['bboxes'])
+
+    new_boxes = [
+        {
+            **boxes[i],
+            'xmin': new_data_dict['bboxes'][i][0],
+            'ymin': new_data_dict['bboxes'][i][1],
+            'xmax': new_data_dict['bboxes'][i][2],
+            'ymax': new_data_dict['bboxes'][i][3],
+        }
+        for i in range(len(boxes))
+    ]
+    return new_data_dict['image'], new_boxes
+
+
+def freeze_model_bn(predictor):
+    model = predictor.model
+    for module in model.modules():
+        if isinstance(module, nn.BatchNorm2d):
+            for param in module.parameters():
+                param.requires_grad = False
+
+
 if __name__ == "__main__":
     p = build_predictor()
+    freeze_model_bn(p)
+
     img = np.zeros([512, 512, 3], dtype=np.uint8)
     boxes = np.array([
         [0, 0, 100, 199],
