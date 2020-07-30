@@ -1,3 +1,5 @@
+# %%
+
 import os
 import io
 import json
@@ -230,10 +232,7 @@ def extract_batch_boxes_feature(predictor, raw_images, raw_boxes_list):
 def apply_augs(im, boxes):
     data_dict = {
         'image': im,
-        'bboxes': [
-            [box['xmin'], box['ymin'], box['xmax'], box['ymax']]
-            for box in boxes
-        ],
+        'bboxes': boxes,
         'fake_label': [0] * len(boxes)
     }
     # print(data_dict['bboxes'])
@@ -276,11 +275,20 @@ def freeze_model_bn(predictor):
         if isinstance(module, nn.BatchNorm2d):
             for param in module.parameters():
                 param.requires_grad = False
-
+# %%
 
 if __name__ == "__main__":
+    # %%
+    import matplotlib.pyplot as plt
+    from PIL import Image
+    img = Image.open('demo/data/images/000456.jpg')
+    img = np.array(img)
     p = build_predictor()
     freeze_model_bn(p)
+    img2 = p.transform_gen.get_transform(img).apply_image(img)
+    # plt.imshow(img2)
+
+    # %%
 
     img = np.zeros([512, 512, 3], dtype=np.uint8)
     boxes = np.array([
@@ -293,7 +301,7 @@ if __name__ == "__main__":
     imgs = [
         np.zeros([512, 512, 3], dtype=np.uint8),
         np.zeros([384, 384, 3], dtype=np.uint8),
-        np.zeros([640, 640, 3], dtype=np.uint8),
+        np.zeros([640, 360, 3], dtype=np.uint8),
     ]
     boxes_list = [
         np.array([
