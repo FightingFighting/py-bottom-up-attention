@@ -256,17 +256,17 @@ def apply_augs(im, boxes):
     new_data_dict = album_augs(**data_dict)
     # print(new_data_dict['bboxes'])
 
-    new_boxes = [
-        {
-            **boxes[i],
-            'xmin': new_data_dict['bboxes'][i][0],
-            'ymin': new_data_dict['bboxes'][i][1],
-            'xmax': new_data_dict['bboxes'][i][2],
-            'ymax': new_data_dict['bboxes'][i][3],
-        }
-        for i in range(len(boxes))
-    ]
-    return new_data_dict['image'], new_boxes
+    # new_boxes = [
+    #     {
+    #         **boxes[i],
+    #         'xmin': new_data_dict['bboxes'][i][0],
+    #         'ymin': new_data_dict['bboxes'][i][1],
+    #         'xmax': new_data_dict['bboxes'][i][2],
+    #         'ymax': new_data_dict['bboxes'][i][3],
+    #     }
+    #     for i in range(len(boxes))
+    # ]
+    return new_data_dict['image'], new_data_dict['bboxes']
 
 
 def freeze_model_bn(predictor):
