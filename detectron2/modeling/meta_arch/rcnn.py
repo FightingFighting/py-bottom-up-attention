@@ -30,7 +30,7 @@ class GeneralizedRCNN(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 
-        self.device = torch.device(cfg.MODEL.DEVICE)
+        # self.device = torch.device(cfg.MODEL.DEVICE)
         self.backbone = build_backbone(cfg)
         self.proposal_generator = build_proposal_generator(cfg, self.backbone.output_shape())
         self.roi_heads = build_roi_heads(cfg, self.backbone.output_shape())
@@ -39,10 +39,23 @@ class GeneralizedRCNN(nn.Module):
 
         assert len(cfg.MODEL.PIXEL_MEAN) == len(cfg.MODEL.PIXEL_STD)
         num_channels = len(cfg.MODEL.PIXEL_MEAN)
-        pixel_mean = torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(num_channels, 1, 1)
-        pixel_std = torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(num_channels, 1, 1)
-        self.normalizer = lambda x: (x - pixel_mean) / pixel_std
+        self.register_buffer(
+            "pixel_mean",
+            torch.Tensor(cfg.MODEL.PIXEL_MEAN).to(self.device).view(num_channels, 1, 1))
+        self.register_buffer(
+            "pixel_std",
+            torch.Tensor(cfg.MODEL.PIXEL_STD).to(self.device).view(num_channels, 1, 1))
+        # self.normalizer = lambda x: (x - self.pixel_mean) / self.pixel_std
         self.to(self.device)
+    
+    @property
+    def device(self):
+        return next(self.backbone.parameters()).device
+    
+    def normalizer(self, x):
+        y = (x - self.pixel_mean)
+        y /= self.pixel_std
+        return y
 
     def visualize_training(self, batched_inputs, proposals):
         """
