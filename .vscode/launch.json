@@ -16,6 +16,17 @@
             "justMyCode": false
         },
         {
+            "name": "hateful_meme_feature",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/demo/hateful_meme_feature.py",
+            "args": [
+                
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",

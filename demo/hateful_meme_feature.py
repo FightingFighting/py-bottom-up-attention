@@ -49,7 +49,9 @@ Load visual gnome labels
 """
 
 # Load VG Classes
-data_path = 'data/genome/1600-400-20'
+current_dir = os.path.dirname(__file__)
+data_path = os.path.join(current_dir, 'data/genome/1600-400-20')
+
 
 vg_classes = []
 with open(os.path.join(data_path, 'objects_vocab.txt')) as f:
@@ -70,7 +72,7 @@ Load Fater R-CNN
 """
 
 cfg = get_cfg()
-cfg.merge_from_file("../configs/VG-Detection/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml")
+cfg.merge_from_file(os.path.join(current_dir, "../configs/VG-Detection/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml"))
 cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 300
 cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.6
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.2
@@ -81,7 +83,7 @@ predictor = DefaultPredictor(cfg)
 
 def doit(raw_image, raw_boxes):
     # Process Boxes
-    raw_boxes = Boxes(torch.from_numpy(raw_boxes).cuda())
+    raw_boxes = Boxes(torch.from_numpy(raw_boxes))
     
     with torch.no_grad():
         raw_height, raw_width = raw_image.shape[:2]

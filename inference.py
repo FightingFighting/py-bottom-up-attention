@@ -275,6 +275,14 @@ def freeze_model_bn(predictor):
         if isinstance(module, nn.BatchNorm2d):
             for param in module.parameters():
                 param.requires_grad = False
+
+
+def freeze_model_backbone(model, module_names=['stem', 'res2']):
+    backbone = model.backbone
+    for name, module in backbone.named_children():
+        if name in module_names:
+            for param in module.parameters():
+                param.requires_grad = False
 # %%
 
 if __name__ == "__main__":
@@ -285,6 +293,7 @@ if __name__ == "__main__":
     img = np.array(img)
     p = build_predictor()
     freeze_model_bn(p)
+    freeze_model_backbone(p.model)
     img2 = p.transform_gen.get_transform(img).apply_image(img)
     # plt.imshow(img2)
 
