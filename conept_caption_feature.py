@@ -79,7 +79,8 @@ class ImageProcessor:
         self._output_queue = mp.Queue() if output_queue is None else output_queue
         self._process = mp.Process(
             target=self.process_images,
-            args=[self._input_queue, self._output_queue]
+            args=[self._input_queue, self._output_queue],
+            daemon=True,
         )
         self._process.start()
     
@@ -97,41 +98,50 @@ class ImageProcessor:
             img = input_queue.get()
             if img == '[STOP]':
                 break
+            try:
+                with logger.catch(reraise=True, message=f'Fail with {img}'):
+                    # raw_image = cv2.imread(img)
+                    image_name = os.path.basename(img)
+                    npz_path = os.path.join(
+                        self.npz_path,
+                        image_name.replace('.jpg', '.npz').replace('.png', '.npz')
+                    )
+                    if tf.io.gfile.exists(npz_path):
+                        output_queue.put(image_name)
+                        continue
+                    
+                    with tf.io.gfile.GFile(img, mode='rb') as imgf:
+                        raw_image = tf.image.decode_image(imgf.read())
+                        raw_image = cv2.cvtColor(raw_image.numpy(), cv2.COLOR_RGB2BGR)
+                    
+                    h, w, c = raw_image.shape
+                    if h < 64 or w < 64 or h > 9600 or w > 9600:
+                        raise ValueError(f'Size doesnt look right :( , {raw_image.shape}')
+                    instances, roi_features = inference.doit_without_boxes(self.predictor, raw_image)
+                    predict = {
+                        'image_name': image_name,
+                        'height': int(instances.image_size[0]),
+                        'width': int(instances.image_size[1]),
+                        'boxes': instances.pred_boxes.tensor.cpu().tolist(),
+                        'classes': [self._vg_classes[i] for i in instances.pred_classes.tolist()],
+                        'attributes': [self._vg_attrs[i] for i in instances.attr_classes.tolist()],
+                        'scores': instances.scores.tolist(),
+                        'attr_scores': instances.attr_scores.tolist()
+                    }
 
-            with logger.catch(reraise=False):
-                # raw_image = cv2.imread(img)
-                with tf.io.gfile.GFile(img, mode='rb') as imgf:
-                    raw_image = tf.image.decode_image(imgf.read())
-                    raw_image = cv2.cvtColor(raw_image.numpy(), cv2.COLOR_RGB2BGR)
-                image_name = os.path.basename(img)
-                h, w, c = raw_image.shape
-                instances, roi_features = inference.doit_without_boxes(self.predictor, raw_image)
-                predict = {
-                    'image_name': image_name,
-                    'height': int(instances.image_size[0]),
-                    'width': int(instances.image_size[1]),
-                    'boxes': instances.pred_boxes.tensor.cpu().tolist(),
-                    'classes': [self._vg_classes[i] for i in instances.pred_classes.tolist()],
-                    'attributes': [self._vg_attrs[i] for i in instances.attr_classes.tolist()],
-                    'scores': instances.scores.tolist(),
-                    'attr_scores': instances.attr_scores.tolist()
-                }
+                    # HACK: GFile can't properly write file for now.
+                    # with tf.io.gfile.GFile(npz_path, mode='wb+') as npf:
+                    tmp_path = os.path.join(
+                        os.path.dirname(__file__),
+                        image_name.replace('.jpg', '.npz').replace('.png', '.npz')
+                    )
+                    np.savez(tmp_path, predict=predict, features=roi_features.cpu().numpy())
+                    tf.io.gfile.copy(tmp_path, npz_path)
+                    tf.io.gfile.remove(tmp_path)
 
-                npz_path = os.path.join(
-                    self.npz_path,
-                    image_name.replace('.jpg', '.npz').replace('.png', '.npz')
-                )
-                # HACK: GFile can't properly write file for now.
-                # with tf.io.gfile.GFile(npz_path, mode='wb+') as npf:
-                tmp_path = os.path.join(
-                    os.path.dirname(__file__),
-                    image_name.replace('.jpg', '.npz').replace('.png', '.npz')
-                )
-                np.savez(tmp_path, predict=predict, features=roi_features.cpu().numpy())
-                tf.io.gfile.copy(tmp_path, npz_path)
-                tf.io.gfile.remove(tmp_path)
-
-                output_queue.put(image_name)
+                    output_queue.put(image_name)
+            except:
+                output_queue.put('[FAIL]')
     
     def process_image_folder(self, src_dir):
         img_list = tf.io.gfile.glob(os.path.join(src_dir, '*.jpg'))
@@ -150,6 +160,15 @@ class ImageProcessor:
     
     def process_single_image(self, image_path):
         self._input_queue.put(image_path)
+    
+    def process_image_list(self, image_paths):
+        for image_path in image_paths:
+            self._input_queue.put(image_path)
+
+
+def load_json(json_path):
+    with tf.io.gfile.GFile(json_path, mode='r') as jf:
+        return json.load(jf)
 
 
 def create_split_image_list_json(image_dir, n_split, output_dir, json_prefix):
@@ -172,19 +191,30 @@ def run_processor(json_dir, output_dir, n_processor=4, num_gpu=4):
     json_list = tf.io.gfile.glob(os.path.join(json_dir, '*.json'))
     logger.warning(f'Find follow json files: {json_list}')
     img_count = 0
+
+    img_list = []
     for i, js in enumerate(json_list):
-        pid = i % n_processor
-        logger.info(f"Assign {js} to [{pid}] processor")
-        img_count += processors[pid].process_image_json(js)
+        img_list += load_json(js)
+    #     pid = i % n_processor
+    #     logger.info(f"Assign {js} to [{pid}] processor")
+    #     img_count += processors[pid].process_image_json(js)
+
+    img_list_re_split = [img_list[i::n_processor] for i in range(n_processor)]
+    for i, sp in enumerate(img_list_re_split):
+        processors[i].process_image_list(sp)
+        img_count += len(sp)
     
     for p in processors:
         p._input_queue.put('[STOP]')
     
     ret_count = 0
+    fail_count = 0
     while True:
         ret = output_queue.get()
         ret_count += 1
-        logger.info(f"{ret_count}/{img_count} - {ret}")
+        if ret == '[FAIL]':
+            fail_count += 1
+        logger.info(f"{ret_count}/{img_count} | {fail_count} - {ret}")
 
 
 if __name__ == "__main__":
