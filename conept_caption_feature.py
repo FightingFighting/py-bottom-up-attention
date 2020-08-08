@@ -163,11 +163,11 @@ def create_split_image_list_json(image_dir, n_split, output_dir, json_prefix):
             json.dump(split, jf)
 
 
-def run_processor(json_dir, output_dir, n_processor=4):
+def run_processor(json_dir, output_dir, n_processor=4, num_gpu=4):
     output_queue = mp.Queue()
     processors = [
-        ImageProcessor(output_dir, output_queue=output_queue)
-        for _ in range(n_processor)]
+        ImageProcessor(output_dir, output_queue=output_queue, device=f"cuda:{i % num_gpu}")
+        for i in range(n_processor)]
     
     json_list = tf.io.gfile.glob(os.path.join(json_dir, '*.json'))
     logger.warning(f'Find follow json files: {json_list}')
