@@ -46,7 +46,7 @@ def showarray(a, fmt='jpeg'):
     display(Image(data=f.getvalue()))
 
 
-def build_predictor():
+def build_predictor(get_classes_map=False, device='cuda'):
     current_dir = os.path.dirname(__file__)
     """
     Load visual gnome labels
@@ -75,13 +75,18 @@ def build_predictor():
 
     cfg = get_cfg()
     cfg.merge_from_file(os.path.join(current_dir, "configs/VG-Detection/faster_rcnn_R_101_C4_attr_caffemaxpool.yaml"))
+    cfg.INPUT.MIN_SIZE_TEST = 600
     cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 300
     cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.6
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.2
     # VG Weight
     cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe_attr.pkl"
+    cfg.MODEL.DEVICE = device
     predictor = DefaultPredictor(cfg)
-    return predictor
+    if get_classes_map:
+        return predictor, vg_classes, vg_attrs
+    else:
+        return predictor
 
 
 def doit_without_boxes(predictor, raw_image):
@@ -285,7 +290,7 @@ def freeze_model_backbone(model, module_names=['stem', 'res2']):
                 param.requires_grad = False
 # %%
 
-if __name__ == "__main__":
+def run_test():
     # %%
     import matplotlib.pyplot as plt
     from PIL import Image
@@ -331,3 +336,19 @@ if __name__ == "__main__":
     fs = extract_batch_boxes_feature(p, imgs, boxes_list)
     import pdb; pdb.set_trace()
     print(f)
+    # %%
+
+if __name__ == "__main__":
+    p = build_predictor()
+    resnet = p.model.backbone
+    im = cv2.imread('/home/ron/Downloads/hateful_meme_data/img/42953.png')
+    # given_boxes = np.array(
+    #     [[ 294.3217,  734.9891,  559.1793, 1110.9277],
+    #     [ 339.7852,  113.7795,  566.7401,  385.4785],
+    #     [  55.5721,   75.3408,  674.5536,  623.3557],
+    #     [ 239.3932,  650.3275,  757.7485, 1177.7111],
+    #     [  32.8885,  346.1343,  673.9932,  626.7932],
+    #     [   0.0000,   29.4954,  785.8928,  684.8771],
+    #     [ 289.9026,  895.4448,  356.8830,  999.8890]])
+    instances, features = doit_without_boxes(p, im)
+    pred = instances.to('cpu')
