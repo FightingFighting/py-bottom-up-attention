@@ -27,6 +27,35 @@
             "justMyCode": false
         },
         {
+            "name": "conept_caption_feature/create_split_image_list_json",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/conept_caption_feature.py",
+            "args": [
+                "create_split_image_list_json",
+                "/home/ron/Downloads/hateful_meme_data/img",
+                "2",
+                "/home/ron/Downloads/hateful_meme_data/dev",
+                "test_split"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
+            "name": "conept_caption_feature/process_jsons",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/conept_caption_feature.py",
+            "args": [
+                "process_jsons",
+                "/home/ron/Downloads/hateful_meme_data/dev",
+                "/home/ron/Downloads/hateful_meme_data/dev",
+                "--n_processor", "1"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",

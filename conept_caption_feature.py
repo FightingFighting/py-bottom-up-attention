@@ -5,6 +5,7 @@ import multiprocessing as mp
 
 # import some common libraries
 import cv2
+import fire
 import torch
 import PIL.Image
 import numpy as np
@@ -36,7 +37,7 @@ from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputLayers, FastRC
 from detectron2.structures.boxes import Boxes
 from detectron2.structures.instances import Instances
 
-from . import inference
+import inference
 
 NUM_OBJECTS = 36
 
@@ -63,7 +64,7 @@ def get_box_feature(boxes, im):
 
 class ImageProcessor:
 
-    def __init__(self, output_path, output_queue=None, device='cuda:0'):
+    def __init__(self, output_path, output_queue=None, device='cuda'):
         self.output_path = output_path
         self.npz_path = os.path.join(self.output_path, 'npz')
         tf.io.gfile.makedirs(self.output_path)
@@ -80,6 +81,7 @@ class ImageProcessor:
             target=self.process_images,
             args=[self._input_queue, self._output_queue]
         )
+        self._process.start()
     
     @property
     def predictor(self):
@@ -87,6 +89,7 @@ class ImageProcessor:
             (self._predictor,
              self._vg_classes,
              self._vg_attrs) = inference.build_predictor(get_classes_map=True, device=self._device)
+            self._predictor.model = self._predictor.model.to(self._device)
         return self._predictor
     
     def process_images(self, input_queue: mp.Queue, output_queue: mp.Queue):
@@ -95,7 +98,7 @@ class ImageProcessor:
             if img == '[STOP]':
                 break
 
-            with logger.catch():
+            with logger.catch(reraise=False):
                 # raw_image = cv2.imread(img)
                 with tf.io.gfile.GFile(img, mode='rb') as imgf:
                     raw_image = tf.image.decode_image(imgf.read())
@@ -107,7 +110,7 @@ class ImageProcessor:
                     'image_name': image_name,
                     'height': int(instances.image_size[0]),
                     'width': int(instances.image_size[1]),
-                    'boxes': instances.pred_boxes.cpu().tolist(),
+                    'boxes': instances.pred_boxes.tensor.cpu().tolist(),
                     'classes': [self._vg_classes[i] for i in instances.pred_classes.tolist()],
                     'attributes': [self._vg_attrs[i] for i in instances.attr_classes.tolist()],
                     'scores': instances.scores.tolist(),
@@ -118,12 +121,21 @@ class ImageProcessor:
                     self.npz_path,
                     image_name.replace('.jpg', '.npz').replace('.png', '.npz')
                 )
-                with tf.io.gfile.GFile(npz_path, mode='wb') as npf:
-                    np.savez(npf, predict=predict, features=roi_features)
+                # HACK: GFile can't properly write file for now.
+                # with tf.io.gfile.GFile(npz_path, mode='wb+') as npf:
+                tmp_path = os.path.join(
+                    os.path.dirname(__file__),
+                    image_name.replace('.jpg', '.npz').replace('.png', '.npz')
+                )
+                np.savez(tmp_path, predict=predict, features=roi_features.cpu().numpy())
+                tf.io.gfile.copy(tmp_path, npz_path)
+                tf.io.gfile.remove(tmp_path)
+
                 output_queue.put(image_name)
     
     def process_image_folder(self, src_dir):
         img_list = tf.io.gfile.glob(os.path.join(src_dir, '*.jpg'))
+        img_list += tf.io.gfile.glob(os.path.join(src_dir, '*.png'))
         for img in img_list:
             self._input_queue.put(img)
     
@@ -142,6 +154,7 @@ class ImageProcessor:
 
 def create_split_image_list_json(image_dir, n_split, output_dir, json_prefix):
     img_list = tf.io.gfile.glob(os.path.join(image_dir, '*.jpg'))
+    img_list += tf.io.gfile.glob(os.path.join(image_dir, '*.png'))
     splits = [img_list[i::n_split] for i in range(n_split)]
     for i, split in enumerate(splits):
         json_name = f"{json_prefix}.{i}.json"
@@ -157,6 +170,7 @@ def run_processor(json_dir, output_dir, n_processor=4):
         for _ in range(n_processor)]
     
     json_list = tf.io.gfile.glob(os.path.join(json_dir, '*.json'))
+    logger.warning(f'Find follow json files: {json_list}')
     img_count = 0
     for i, js in enumerate(json_list):
         pid = i % n_processor
@@ -174,7 +188,7 @@ def run_processor(json_dir, output_dir, n_processor=4):
 
 
 if __name__ == "__main__":
-    with logger.catch():
+    with logger.catch(reraise=True):
         fire.Fire({
             'create_split_image_list_json': create_split_image_list_json,
             'process_jsons': run_processor,
