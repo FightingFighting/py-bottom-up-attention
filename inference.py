@@ -89,7 +89,7 @@ def build_predictor(get_classes_map=False, device='cuda'):
         return predictor
 
 
-def doit_without_boxes(predictor, raw_image):
+def doit_without_boxes(predictor, raw_image, full_pred=False):
     with torch.no_grad():
         raw_height, raw_width = raw_image.shape[:2]
         print("Original image size: ", (raw_height, raw_width))
@@ -154,8 +154,10 @@ def doit_without_boxes(predictor, raw_image):
         instances.attr_classes = max_attr_label
         
         print(instances)
-        
-        return instances, roi_features
+        if full_pred:
+            return instances, roi_features, pred_class_logits, pred_attr_logits
+        else:
+            return instances, roi_features
 
 
 def extract_boxes_feature(predictor, raw_image, raw_boxes):

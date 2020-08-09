@@ -117,7 +117,8 @@ class ImageProcessor:
                     h, w, c = raw_image.shape
                     if h < 64 or w < 64 or h > 9600 or w > 9600:
                         raise ValueError(f'Size doesnt look right :( , {raw_image.shape}')
-                    instances, roi_features = inference.doit_without_boxes(self.predictor, raw_image)
+                    (instances, roi_features,
+                     pred_class_logits, pred_attr_logits) = inference.doit_without_boxes(self.predictor, raw_image, full_pred=True)
                     predict = {
                         'image_name': image_name,
                         'height': int(instances.image_size[0]),
@@ -135,7 +136,11 @@ class ImageProcessor:
                         os.path.dirname(__file__),
                         image_name.replace('.jpg', '.npz').replace('.png', '.npz')
                     )
-                    np.savez(tmp_path, predict=predict, features=roi_features.cpu().numpy())
+                    np.savez(
+                        tmp_path, predict=predict,
+                        features=roi_features.cpu().numpy(),
+                        pred_class_logits=pred_class_logits.cpu().numpy(),
+                        pred_attr_logits=pred_attr_logits.cpu().numpy())
                     tf.io.gfile.copy(tmp_path, npz_path)
                     tf.io.gfile.remove(tmp_path)
 
