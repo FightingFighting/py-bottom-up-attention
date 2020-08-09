@@ -152,10 +152,13 @@ def doit_without_boxes(predictor, raw_image, full_pred=False):
         max_attr_label = max_attr_label[ids].detach()
         instances.attr_scores = max_attr_prob
         instances.attr_classes = max_attr_label
+
+        boxes_class_probs = probs[ids]
+        boxes_attr_probs = attr_prob[ids]
         
-        print(instances)
+        # print(instances)
         if full_pred:
-            return instances, roi_features, pred_class_logits, pred_attr_logits
+            return instances, roi_features, boxes_class_probs, boxes_attr_probs
         else:
             return instances, roi_features
 
