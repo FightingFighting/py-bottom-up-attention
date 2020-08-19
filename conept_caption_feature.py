@@ -39,8 +39,6 @@ from detectron2.structures.instances import Instances
 
 import inference
 
-NUM_OBJECTS = 36
-
 
 def get_box_feature(boxes, im):
     h, w, c = im.shape

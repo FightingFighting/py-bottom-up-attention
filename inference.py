@@ -36,7 +36,7 @@ from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputLayers, FastRC
 from detectron2.structures.boxes import Boxes
 from detectron2.structures.instances import Instances
 
-NUM_OBJECTS = 36
+NUM_OBJECTS = 100
 
 
 def showarray(a, fmt='jpeg'):
