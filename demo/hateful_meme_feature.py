@@ -34,7 +34,7 @@ from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputLayers, FastRC
 from detectron2.structures.boxes import Boxes
 from detectron2.structures.instances import Instances
 
-NUM_OBJECTS = 36
+NUM_OBJECTS = 18
 
 
 def showarray(a, fmt='jpeg'):
@@ -77,7 +77,9 @@ cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 300
 cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.6
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.2
 # VG Weight
-cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe_attr.pkl"
+# cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe_attr.pkl"
+cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe_attr_original.pkl"
+cfg.MODEL.DEVICE = 'cuda'
 predictor = DefaultPredictor(cfg)
 
 
@@ -98,6 +100,7 @@ def doit(raw_image, raw_boxes):
         #print(scale_x, scale_y)
         boxes = raw_boxes.clone()
         boxes.scale(scale_x=scale_x, scale_y=scale_y)
+        boxes.tensor = boxes.tensor.to(cfg.MODEL.DEVICE)
         
         # ----
         image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
@@ -278,7 +281,11 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False):
     for i, img_anno in enumerate(box_anno):
         boxes = img_anno['boxes_and_score']
         img_name = img_anno['img_name']
-        img_path = os.path.join(dataset_root, 'img', img_name)
+        
+        # NOTE: using super resolution image
+        img_path = os.path.join(dataset_root, 'img_2x', img_name)
+        if not os.path.exists(img_path) or True:
+            img_path = os.path.join(dataset_root, 'img', img_name)
         
         im = cv2.imread(img_path)
         if augment:
@@ -334,7 +341,10 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False):
             'image_shape': [h, w, c],
         }
         new_annos.append(new_anno)
-        name2feature[img_name] = features
+        name2feature[img_name] = {
+            'features': features,
+            'anno': new_anno,
+        }
         
         logger.info(f"{i}/{len(box_anno)}, {im.shape}")
     
@@ -351,10 +361,16 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False):
 
 if __name__ == "__main__":
     with logger.catch():
+        # oid_boxes(
+        #     '/home/ron/Downloads/hateful_meme_data/box_annos.json',
+        #     '/home/ron/Downloads/hateful_meme_data',
+        #     f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.pt',
+        #     augment=False
+        # )
         for i in range(3):
             oid_boxes(
                 '/home/ron/Downloads/hateful_meme_data/box_annos.json',
                 '/home/ron/Downloads/hateful_meme_data',
-                f'/home/ron/Downloads/hateful_meme_data/hateful_memes.aug.{i}.pt',
+                f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.aug.{i}.pt',
                 augment=True
             )
