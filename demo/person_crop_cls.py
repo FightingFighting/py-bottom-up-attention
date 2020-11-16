@@ -1,14 +1,15 @@
 import os
 import io
 import json
+import glob
 
 # import some common libraries
 import numpy as np
 import cv2
 import torch
-import PIL.Image
-from torch import nn
 import detectron2
+from PIL import Image
+from torch import nn
 from loguru import logger
 
 from albumentations import (
@@ -189,7 +190,7 @@ def doit_without_boxes(raw_image):
         # boxes = proposal_boxes[0].tensor    
         
         # NMS
-        for nms_thresh in np.arange(0.5, 1.0, 0.1):
+        for nms_thresh in np.arange(0.4, 0.61, 0.1):
             instances, ids = fast_rcnn_inference_single_image(
                 boxes, probs, image.shape[1:], 
                 score_thresh=0.2, nms_thresh=nms_thresh, topk_per_image=NUM_OBJECTS
@@ -207,26 +208,6 @@ def doit_without_boxes(raw_image):
         print(instances)
         
         return instances, roi_features
-
-
-def get_box_feature(boxes, im):
-    h, w, c = im.shape
-    features = []
-    for box in boxes:
-        norm_x = box['xmin']
-        norm_y = box['ymin']
-        norm_w = box['xmax'] - box['xmin']
-        norm_h = box['ymax'] - box['ymin']
-        features.append([
-            norm_x,
-            norm_y,
-            norm_x + norm_w,
-            norm_y + norm_h,
-            norm_w,
-            norm_h,
-        ])
-    # (num_boxes, 6)
-    return torch.Tensor(features)
 
 
 def apply_augs(im, boxes):
@@ -272,54 +253,47 @@ def apply_augs(im, boxes):
     return new_data_dict['image'], new_boxes
 
 
-def oid_boxes(json_path, dataset_root, output_path, augment=False):
-    with open(json_path, mode='r') as anno_file:
-        box_anno = json.load(anno_file)
-    
-    new_annos = []
+def crop_image_boxes(img, boxes):
+    h, w = img.shape[:2]
+    crops = []
+    for box_norm in boxes:
+        box = [
+            int(box_norm['xmin'] * w),
+            int(box_norm['ymin'] * h),
+            int(box_norm['xmax'] * w),
+            int(box_norm['ymax'] * h),
+        ]
+        crop = img[box[1]: box[3], box[0]: box[2], ...]
+        crops.append(crop)
+    return crops
+
+def race_images(dataset_root, output_dir, augment=False):
+    img_list = glob.glob(os.path.join(dataset_root, '**', '*.jpg'))
+    img_list += glob.glob(os.path.join(dataset_root, '**', '*.png'))
+    annotations = []
     name2feature = {}
-    for i, img_anno in enumerate(box_anno):
-        boxes = img_anno['boxes_and_score']
-        img_name = img_anno['img_name']
-        
-        # NOTE: using super resolution image
-        img_path = os.path.join(dataset_root, 'img_clean', img_name)
-        if not os.path.exists(img_path) or True:
-            img_path = os.path.join(dataset_root, 'img', img_name)
+    
+    for i, img_path in enumerate(img_list):
+        img_class = os.path.basename(os.path.dirname(img_path))
+        img_name = os.path.basename(img_path)
+        img_id = img_name.replace('.png', '').replace('.jpg', '')
         
         im = cv2.imread(img_path)
         if augment:
             im, boxes = apply_augs(im, boxes)
         h, w, c = im.shape
 
-        if len(boxes) > 0:
-            box_np = [[
-                box['xmin'] * w,
-                box['ymin'] * h,
-                box['xmax'] * w,
-                box['ymax'] * h,
-            ] for box in boxes]
-            box_np = np.asarray(box_np)
-            assert (box_np[:, 0::2] <= w).all() and (box_np[:, 0::2] >= 0).all()
-            assert (box_np[:, 1::2] <= h).all() and (box_np[:, 1::2] >= 0).all()
-
-            instances, features = doit(im, box_np)
-        else:
-            instances, features = doit_without_boxes(im)
-            pred_boxes = instances.pred_boxes.tensor.cpu()
-            pred_boxes /= torch.Tensor([w, h, w, h])
-            boxes = [
-                {
-                    'xmin': box[0],
-                    'ymin': box[1],
-                    'xmax': box[2],
-                    'ymax': box[3],
-                }
-                for box in pred_boxes.tolist()]
-        features = torch.cat([
-            features.cpu(),
-            get_box_feature(boxes, im)
-        ], dim=1)
+        instances, features = doit_without_boxes(im)
+        pred_boxes = instances.pred_boxes.tensor.cpu()
+        pred_boxes /= torch.Tensor([w, h, w, h])
+        boxes = [
+            {
+                'xmin': box[0],
+                'ymin': box[1],
+                'xmax': box[2],
+                'ymax': box[3],
+            }
+            for box in pred_boxes.tolist()]
         
         vg_class = instances.pred_classes.tolist()
         vg_class_name = [vg_classes[i] for i in instances.pred_classes.tolist()]
@@ -335,42 +309,41 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False):
             'vg_attr_class_name': vg_attr_class_name[b],
             'vg_attr_score': vg_attr_score[b],
         } for b, box in enumerate(boxes)]
-        new_anno = {
-            **img_anno,
-            'boxes_and_score': new_boxes,
-            'image_shape': [h, w, c],
-        }
-        new_annos.append(new_anno)
-        name2feature[img_name] = {
-            'features': features,
-            'anno': new_anno,
-        }
         
-        logger.info(f"{i}/{len(box_anno)}, {im.shape}")
-    
-    pt_path = output_path
-    torch.save(name2feature, pt_path)
+        person_boxes = []
+        person_features = []
 
-    if not augment:
-        js_path = os.path.join(
-            os.path.dirname(output_path),
-            'hateful_boxes_attr.json')
-        with open(js_path, mode='w') as jf:
-            json.dump(new_annos, jf)
+        for box, feat in zip(new_boxes, features):
+            print(box['vg_class_name'])
+            if box['vg_class_name'] in ['woman', 'man', 'person']:
+                person_boxes.append(box)
+                person_features.append(feat)
+
+        name2feature[img_name] = {
+            'image_shape': [h, w, c],
+            'image_class': img_class,
+            'boxes_and_score': person_boxes,
+            'features': person_features,
+        }
+
+        im_rgb = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
+        im_rgb_crops = crop_image_boxes(im_rgb, person_boxes)
+        for j, crop in enumerate(im_rgb_crops):
+            crop_name = f"{img_id}.{j}.jpg"
+            os.makedirs(os.path.join(output_dir, img_class), exist_ok=True)
+            out_path = os.path.join(output_dir, img_class, crop_name)
+            Image.fromarray(crop).save(out_path)
+        
+        logger.info(f"{i} / {len(img_list)}, {im.shape}")
+    
+    pt_path = os.path.join(output_dir, 'det_and_feat.pt')
+    torch.save(name2feature, pt_path)
 
 
 if __name__ == "__main__":
     with logger.catch():
-        # oid_boxes(
-        #     '/home/ron/Downloads/hateful_meme_data_phase2/box_annos.json',
-        #     '/home/ron/Downloads/hateful_meme_data_phase2',
-        #     f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.pt',
-        #     augment=False
-        # )
-        for i in range(3):
-            oid_boxes(
-                '/home/ron/Downloads/hateful_meme_data_phase2/box_annos.json',
-                '/home/ron/Downloads/hateful_meme_data_phase2',
-                f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.aug.{i}.pt',
-                augment=True
-            )
+        race_images(
+            '/home/ron/Downloads/hateful_meme_cache/JumpStory/race',
+            '/home/ron/Downloads/hateful_meme_cache/JumpStory/crop',
+            augment=False
+        )

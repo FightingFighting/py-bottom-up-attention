@@ -345,6 +345,7 @@ def run_test():
 
 if __name__ == "__main__":
     p = build_predictor()
+    print(p.model.backbone.stem.conv1.norm.running_mean)
     resnet = p.model.backbone
     im = cv2.imread('/home/ron/Downloads/hateful_meme_data/img/42953.png')
     # given_boxes = np.array(
