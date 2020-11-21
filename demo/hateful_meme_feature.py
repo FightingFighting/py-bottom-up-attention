@@ -2,6 +2,8 @@ import functools
 import os
 import io
 import json
+import time
+import random
 
 # import some common libraries
 import cv2
@@ -12,6 +14,7 @@ import numpy as np
 from torch import nn
 import detectron2
 from loguru import logger
+import imgaug
 
 from albumentations import (
     BboxParams,
@@ -274,7 +277,16 @@ def apply_augs(im, boxes):
     return new_data_dict['image'], new_boxes
 
 
-def oid_boxes(json_path, dataset_root, output_path, augment=False):
+def oid_boxes(json_path, dataset_root, output_path, augment=False, random_seed=None):
+    if random_seed is None:
+        random_seed = int(time.time()) % 10000
+    if augment:
+        logger.info(f"random_seed: {random_seed}")
+        random.seed(random_seed)
+        np.random.seed(random_seed)
+        torch.manual_seed(random_seed)
+        imgaug.random.seed(random_seed)
+    
     with open(json_path, mode='r') as anno_file:
         box_anno = json.load(anno_file)
     
@@ -292,6 +304,8 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False):
         im = cv2.imread(img_path)
         if augment:
             im, boxes = apply_augs(im, boxes)
+            print(f"[{i}]  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            print(boxes)
         h, w, c = im.shape
 
         if len(boxes) > 0:
@@ -346,6 +360,7 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False):
         name2feature[img_name] = {
             'features': features,
             'anno': new_anno,
+            'seed': random_seed,
         }
         
         logger.info(f"{i}/{len(box_anno)}, {im.shape}")
