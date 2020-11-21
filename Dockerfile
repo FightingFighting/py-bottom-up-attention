@@ -23,10 +23,14 @@ RUN apt-get update \
     libomp-dev \
     tmux \
     python3-pip
-COPY . /py-bottom-up-attention
+# COPY . /py-bottom-up-attention
+RUN git clone https://github.com/HimariO/py-bottom-up-attention.git \
+    && cd py-bottom-up-attention \
+    && git checkout package \
+    && cd ..
 RUN cd py-bottom-up-attention \
     && pip3 install --upgrade pip \
     && pip3 install scikit-build \
     && pip3 install -r requirements.txt \
     && python3 setup.py build develop
-WORKDIR /py-bottom-up-attetion
+WORKDIR /py-bottom-up-attetion/demo

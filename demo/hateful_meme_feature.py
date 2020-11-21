@@ -1,12 +1,14 @@
+import functools
 import os
 import io
 import json
 
 # import some common libraries
-import numpy as np
 import cv2
+import fire
 import torch
 import PIL.Image
+import numpy as np
 from torch import nn
 import detectron2
 from loguru import logger
@@ -360,17 +362,21 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False):
 
 
 if __name__ == "__main__":
-    with logger.catch():
+    with logger.catch(reraise=True):
         # oid_boxes(
         #     '/home/ron/Downloads/hateful_meme_data_phase2/box_annos.json',
         #     '/home/ron/Downloads/hateful_meme_data_phase2',
         #     f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.pt',
         #     augment=False
         # )
-        for i in range(3):
-            oid_boxes(
-                '/home/ron/Downloads/hateful_meme_data_phase2/box_annos.json',
-                '/home/ron/Downloads/hateful_meme_data_phase2',
-                f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.aug.{i}.pt',
-                augment=True
-            )
+        # for i in range(3):
+        #     oid_boxes(
+        #         '/home/ron/Downloads/hateful_meme_data_phase2/box_annos.json',
+        #         '/home/ron/Downloads/hateful_meme_data_phase2',
+        #         f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.aug.{i}.pt',
+        #         augment=True
+        #     )
+        fire.Fire({
+            'extract_oid_boxes_feat': oid_boxes,
+            'extract_oid_boxes_feat_with_img_aug': functools.partial(oid_boxes, augment=True),
+        })
