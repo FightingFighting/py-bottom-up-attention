@@ -304,8 +304,8 @@ def oid_boxes(json_path, dataset_root, output_path, augment=False, random_seed=N
         im = cv2.imread(img_path)
         if augment:
             im, boxes = apply_augs(im, boxes)
-            print(f"[{i}]  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-            print(boxes)
+            # print(f"[{i}]  >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            # print(boxes)
         h, w, c = im.shape
 
         if len(boxes) > 0:
@@ -384,14 +384,14 @@ if __name__ == "__main__":
         #     f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.pt',
         #     augment=False
         # )
-        # for i in range(3):
-        #     oid_boxes(
-        #         '/home/ron/Downloads/hateful_meme_data_phase2/box_annos.json',
-        #         '/home/ron/Downloads/hateful_meme_data_phase2',
-        #         f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2.aug.{i}.pt',
-        #         augment=True
-        #     )
-        fire.Fire({
-            'extract_oid_boxes_feat': oid_boxes,
-            'extract_oid_boxes_feat_with_img_aug': functools.partial(oid_boxes, augment=True),
-        })
+        for i in range(3):
+            oid_boxes(
+                '/home/ron/Downloads/hateful_meme_data_phase2/box_annos.json',
+                '/home/ron/Downloads/hateful_meme_data_phase2',
+                f'/home/ron/Downloads/hateful_meme_data/hateful_memes_v2_1122.aug.{i}.pt',
+                augment=True
+            )
+        # fire.Fire({
+        #     'extract_oid_boxes_feat': oid_boxes,
+        #     'extract_oid_boxes_feat_with_img_aug': functools.partial(oid_boxes, augment=True),
+        # })

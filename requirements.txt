@@ -6,3 +6,5 @@ cython
 opencv-python
 tensorflow
 fire
+albumentations
+loguru

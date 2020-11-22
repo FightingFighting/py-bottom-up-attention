@@ -24,13 +24,15 @@ RUN apt-get update \
     tmux \
     python3-pip
 # COPY . /py-bottom-up-attention
+# RUN echo ""
 RUN git clone https://github.com/HimariO/py-bottom-up-attention.git \
     && cd py-bottom-up-attention \
     && git checkout package \
     && cd ..
 RUN cd py-bottom-up-attention \
     && pip3 install --upgrade pip \
-    && pip3 install scikit-build \
+    && pip3 install scikit-build loguru imgaug albumentations \
     && pip3 install -r requirements.txt \
+    && pip install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI' \
     && python3 setup.py build develop
-WORKDIR /py-bottom-up-attetion/demo
+WORKDIR /py-bottom-up-attention/demo
